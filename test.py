@@ -134,3 +134,7 @@ class Test(unittest.TestCase):
             set(["a", "c", "b"]),
             "toggle expected (a, c, b) got %s" % opts.selection(),
         )
+
+if __name__ == "__main__":
+    # run the test suite
+    unittest.main()
