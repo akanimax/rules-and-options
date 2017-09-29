@@ -8,6 +8,15 @@
 
 # coded by: Animesh Karnewar
 
+
+class Options:
+    '''
+        The Data type for emulating the Options "Opts" :D
+    '''
+    pass
+
+
+
 class RuleSet:
     '''
         The Data type for holding the rules defined for certain options to be toggled
@@ -33,8 +42,12 @@ class RuleSet:
             source => the symbol at the source of dependency
         '''
         # the implementation logic is pretty simple
-        dependency = (dest, source) # the tuple representing the dependency relationship
-        self.__deps.add(dependency)
+        if(dest != source):
+            dependency = (dest, source) # the tuple representing the dependency relationship
+            self.__deps.add(dependency)
+
+        # if they are equal, I am handling the case in the areDependent method.
+        # There is no need to carry around self-dependencies in the deps list.
 
         # add the two new symbols to the set.
         self.__symbols.add(dest); self.__symbols.add(source)
@@ -49,6 +62,8 @@ class RuleSet:
             sym2 => second symbol
         '''
         # implementation is again quite lucid
+        assert sym1 != sym2, "There can never be a conflict between same symbols"
+
         conflict = (sym1, sym2) # reverse is also same
         # since 'a and b' mutually exclusive also means 'b and a' are too.
         self.__confs.add(conflict)
@@ -62,13 +77,51 @@ class RuleSet:
             method to check if the Rules in the RuleSet are coherent
             @return => bool status of coherence
         '''
-        pass
+        # Now that the areDependent method has been implemented, this method
+        # will be very simple to implement
 
+        # create shorthand function for NotDependent realtion
+        def areNotDependent(dest, source):
+            return not self.areDependent(dest, source)
 
-    # ==========================================================================
-    # Following are some of the utility methods. They are not necessarily used
-    # for any logical operations
-    # ==========================================================================
+        #=======================================================================
+        # The following two conditions must be satisfied in order for a rule set
+        # to be coherent:
+        # a.) None of the conflicts present in the confs list should be
+        # directly or indirectly dependent
+        #
+        # b.) There shouldn't be any common dependence between the two conflicting
+        # symbols in the confs list
+        #=======================================================================
+
+        # check the first condition
+        # check if any of the conflicts in the ruleSet are dependent
+        stat1 = map(lambda x: (areNotDependent(x[0], x[1]) and areNotDependent(x[1], x[0])),
+                        self.__confs)
+
+        # reduce all the statuses into the final coherence status
+        check_a = reduce(lambda x, y: x and y, stat1, True)
+
+        # check the second condition
+        # check for the remaining symbols if there is any common dependency between
+        # a conflicting rule
+        def check_common_dependence(sym1, sym2):
+            ''' helper method for single conflict rule checking'''
+            # filter out the remaining symbols after discarding the sym1 and sym2
+            rem = self.__symbols.copy() # create a copy of the symbols
+            rem.discard(sym1); rem.discard(sym2)
+
+            # for every rem symbol, make sure there is no dependency between sym1 and sym2
+            return reduce(lambda x, y: x or y,
+              map(lambda x: (self.areDependent(x, sym1) and self.areDependent(x, sym2)), rem), False)
+
+        # check common dependence for all the conflicts
+        check_b = reduce(lambda x, y: x or y,
+            map(lambda x: check_common_dependence(x[0], x[1]), self.__confs), False)
+
+        # return the coherence (check_a should be True and check_b should be False)
+        return check_a and (not check_b)
+
 
     # Recursive method
     def areDependent(self, dest, source):
@@ -79,8 +132,12 @@ class RuleSet:
             dest => receiving end of potential dependency
             source => source of potential dependency
         '''
-        if((dest, source) in self.__deps):
-            ''' Base case '''
+
+        assert dest in self.__symbols, "Destination symbol should be in symbol list"
+        assert source in self.__symbols, "Source symbol should be in symbol list"
+
+        if(((dest, source) in self.__deps) or source == dest):
+            ''' Base case ''' # "a" always depends on "a". That's why the second condition
             return True
 
         else:
@@ -117,21 +174,26 @@ class RuleSet:
                 return reduce(lambda x, y: x or y,
                             map(lambda x: self.areDependent(x[0], x[1]), crs_join), False)
 
-    def getDependencies(self):
+
+    # ==========================================================================
+    # Following are some of the utility methods. They are not necessarily used
+    # for any logical operations
+    # ==========================================================================
+    def _getDependencies(self):
         '''
             method to return the dependencies currently in the RuleSet
             @return => the dependencies
         '''
         return self.__deps.copy() # be careful not to return the private copy
 
-    def getConflicts(self):
+    def _getConflicts(self):
         '''
             method to return the conflicts currently in the RuleSet
             @return => the conflicts
         '''
         return self.__confs.copy()
 
-    def getSymbols(self):
+    def _getSymbols(self):
         '''
             method to return the Symbols currently in the RuleSet
             @return => the unique symbols in use
@@ -139,6 +201,16 @@ class RuleSet:
         return self.__symbols.copy()
 
 
+
+
+
+
+
+#===============================================================================
+#-------------------------------------------------------------------------------
+# API USAGE AND GENERAL MODULE TESTING SCRIPT:
+#-------------------------------------------------------------------------------
+#===============================================================================
 if(__name__ == "__main__"):
     ''' Api usage script and naive testing '''
 
@@ -152,19 +224,24 @@ if(__name__ == "__main__"):
     rs.addDep("c", "d")
 
     # print and check the currently present
-    print "Currently present dependencies: " + str(rs.getDependencies()) + "\n\n"
-
-    # add some conflicts
-    rs.addConflict("a", "b")
+    print "Currently present dependencies: " + str(rs._getDependencies()) + "\n\n"
+# print ts.areDependent("deman", "yondu")
+    # print ts.areDependent("e", "a")
+    # print ts.areDependent("a", "a")
     rs.addConflict("e", "f")
 
     # print and check the currently present conflicts
-    print "Currently present conflicts: " + str(rs.getConflicts()) + "\n\n"
+    print "Currently present conflicts: " + str(rs._getConflicts()) + "\n\n"
 
     ts = RuleSet()
     ts.addDep("a", "b")
     ts.addDep("b", "c")
     ts.addDep("c", "d")
     ts.addDep("d", "e")
-    print ts.getDependencies()
-    print ts.areDependent("deman", "londa")
+    ts.addConflict("k", "d")
+    # ts.addConflict("b", "b") # This raises an AssertionError
+    print "All symbols in RuleSet: " + str(ts._getSymbols())
+    print ts.areDependent("k", "d")
+    print ts.areDependent("e", "a")
+    print ts.areDependent("a", "a")
+    print ts.isCoherent()
