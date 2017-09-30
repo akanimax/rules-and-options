@@ -13,15 +13,102 @@ class Options:
     '''
         The Data type for emulating the Options "Opts" :D
     '''
-    pass
 
+    def __init__(self, rules):
+        '''
+            constructor of the class. The options need to be constructed using the
+            ruleSet composed with it.
+        '''
+        # initialize the selection set to empty
+        self.__selection = set() # empty set
+
+        # make sure that the rules passed to the constructor are coherent
+        assert rules.isCoherent(), "Options cannot be formed since rules are not coherent"
+
+        # attach ther rules to a private data member
+        self.__rules = rules
+
+
+    # ==========================================================================
+    # Private helper methods:
+    # ==========================================================================
+    def __switch_on(self, opt):
+        '''
+            private helper to turn on a particular option including it's
+            dependencies.
+            @param
+            opt => the option to be turned on
+        '''
+        # switch on the current option
+        self.__selection.add(opt)
+
+        # find out all the dependencies of opt
+        opt_deps = self.__rules._getAllDependencies(opt)
+        # now switch on all theses dependencies manually (not recursively since there can
+        # be cyclic dependencies)
+        self.__selection = self.__selection.union(opt_deps)
+
+        # find out all the conflicts of opt
+        opt_confs = self.__rules._getAllConflicts(opt)
+        # now switch off all the conflicts:
+        map(lambda x: self.__switch_off(x), opt_confs)
+
+        # now manually generate all the conflicts of these opt_deps and switch them off
+        opt_deps_confs = set() # initialize to empty set
+        for opt_dep in opt_deps:
+            dep_confs = self.__rules._getAllConflicts(opt_dep)
+            opt_deps_confs = opt_deps_confs.union(dep_confs)
+        # switch off all the opt_deps_confs
+        map(lambda x: self.__switch_off(x), opt_deps_confs)
+
+
+    def __switch_off(self, opt):
+        '''
+            private helper to turn off a particular option including it's
+            dependencies.
+            @param
+            opt => the option to be turned off
+        '''
+        # switch off the clicked option
+        self.__selection.discard(opt)
+
+        # find out all the dependants of opt
+        opt_dependants = self.__rules._getAllDependants(opt)
+        # turn off all the dependants
+        self.__selection = self.__selection.difference(opt_dependants)
+
+    # ==========================================================================
+    # Exposed API:
+    # ==========================================================================
+    def selection(self):
+        '''
+            getter method for the currently active options
+            @return => a string slice of the currently active options
+        '''
+        return self.__selection.copy() # return a new copy
+
+    # most important method
+    def toggle(self, opt):
+        '''
+            method to turn on or turn off a particular option
+            @param
+            opt => option to be toggled
+        '''
+        # implementation is pretty simple since we already have the switch on and
+        # switch off methods already implemented
+        if(opt not in self.__selection):
+            # Option is off
+            self.__switch_on(opt) # turn the opt on
+
+        else:
+            # Option is currently on.
+            self.__switch_off(opt)
 
 
 class RuleSet:
     '''
         The Data type for holding the rules defined for certain options to be toggled
     '''
-
 
     def __init__(self):
         '''
@@ -64,9 +151,10 @@ class RuleSet:
         # implementation is again quite lucid
         assert sym1 != sym2, "There can never be a conflict between same symbols"
 
-        conflict = (sym1, sym2) # reverse is also same
+        conflict = (sym1, sym2); rev_conflict = (sym2, sym1) # reverse is also same
         # since 'a and b' mutually exclusive also means 'b and a' are too.
-        self.__confs.add(conflict)
+        if(conflict not in self.__confs and rev_conflict not in self.__confs):
+            self.__confs.add(conflict)
 
         # add the two symbols to the symbol set
         self.__symbols.add(sym1); self.__symbols.add(sym2)
@@ -200,11 +288,66 @@ class RuleSet:
         '''
         return self.__symbols.copy()
 
+    def _getAllDependencies(self, sym):
+        '''
+            method to return all the possible dependencies of the given symbol
+            @param
+            sym => the symbol to find all the dependencies of
+            @return => set of all the dependencies of sym
+        '''
+        assert sym in self.__symbols, "Can't fetch dependencies. symbol not in ruleSet"
 
+        check = self.__symbols.copy(); check.discard(sym)
 
+        # compute the dependencies
+        deps = set() # initialize to empty list
+        for sym_check in check:
+            if(self.areDependent(sym, sym_check)):
+                deps.add(sym_check)
 
+        # return the computed dependencies:
+        return deps
 
+    def _getAllConflicts(self, sym):
+        '''
+            method to find out all the conflicts of a given symbol
+            @param
+            sym => the symbol whose conflicts are to be computed
+            @return => set of all the conflicts of sym
+        '''
+        assert sym in self.__symbols, "Can't fetch conflicts. symbol not in ruleset"
 
+        sym_confs = set() # initialize to empty set
+
+        # compute the conflicts:
+        for conf in self.__confs:
+            if(conf[0] == sym):
+                sym_confs.add(conf[1])
+            if(conf[1] == sym):
+                sym_confs.add(conf[0])
+
+        # return the so computed conflicts
+        return sym_confs
+
+    def _getAllDependants(self, sym):
+        '''
+            method to find out all the dependants of a given symbol
+            @param
+            sym => the symbol whose dependants are to be computed
+            @return => set of all the dependants of sym
+        '''
+        assert sym in self.__symbols, "Can't fetch the dependants. symbol not in ruleset"
+
+        check = self.__symbols.copy(); check.discard(sym)
+
+        # compute all the dependants:
+        sym_dependants = set() # initialize to empty set
+        for sym_check in check:
+            if(self.areDependent(sym_check, sym)):
+                sym_dependants.add(sym_check)
+
+        # return the so computed sym_dependants:
+        return sym_dependants
 
 #===============================================================================
 #-------------------------------------------------------------------------------
